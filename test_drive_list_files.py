@@ -101,9 +101,9 @@ def find_folder_by_name(service, folder_name: str, parent_folder_id: str = None)
             'includeItemsFromAllDrives': True,
         }
         
-        if SHARED_DRIVE_ID:
-            params['driveId'] = SHARED_DRIVE_ID
-            params['corpora'] = 'drive'
+        # files().list()에서 parent_folder_id 조건이 있으면
+        # 해당 폴더 내에서만 검색하므로 driveId 불필요
+        # supportsAllDrives와 includeItemsFromAllDrives만으로 충분
         
         results = service.files().list(**params).execute()
         items = results.get('files', [])
@@ -130,9 +130,9 @@ def list_files_in_folder(service, folder_id: str, folder_name: str = "", max_res
             'includeItemsFromAllDrives': True,
         }
         
-        if SHARED_DRIVE_ID:
-            params['driveId'] = SHARED_DRIVE_ID
-            params['corpora'] = 'drive'
+        # files().list()에서 특정 폴더 내 검색 시
+        # supportsAllDrives와 includeItemsFromAllDrives만으로 충분
+        # driveId 파라미터는 사용하지 않음
         
         results = service.files().list(**params).execute()
         items = results.get('files', [])
