@@ -102,9 +102,9 @@ class DriveUploader:
                 'includeItemsFromAllDrives': True,
             }
             
-            if SHARED_DRIVE_ID:
-                params['driveId'] = SHARED_DRIVE_ID
-                params['corpora'] = 'drive'
+            # files().list()에서 parent_folder_id 조건이 있으면
+            # 해당 폴더 내에서만 검색하므로 driveId 불필요
+            # supportsAllDrives와 includeItemsFromAllDrives만으로 충분
             
             results = self.drive.files().list(**params).execute()
             items = results.get('files', [])
@@ -133,12 +133,11 @@ class DriveUploader:
             params = {
                 'body': file_metadata,
                 'fields': 'id, name',
-                'supportsAllDrives': True,
+                'supportsAllDrives': True,  # Shared Drive 지원 필수
             }
             
-            # Shared Drive ID가 있으면 사용
-            if SHARED_DRIVE_ID:
-                params['driveId'] = SHARED_DRIVE_ID
+            # files().create()에는 driveId 파라미터가 없음
+            # supportsAllDrives만으로 충분함
             
             folder = self.drive.files().create(**params).execute()
             folder_id = folder.get('id')
@@ -241,12 +240,11 @@ class DriveUploader:
                 'body': file_metadata,
                 'media': media,
                 'fields': 'id, name, webViewLink, size',
-                'supportsAllDrives': True,
+                'supportsAllDrives': True,  # Shared Drive 지원 필수
             }
             
-            # Shared Drive ID가 있으면 사용
-            if SHARED_DRIVE_ID:
-                params['driveId'] = SHARED_DRIVE_ID
+            # files().create()에는 driveId 파라미터가 없음
+            # supportsAllDrives만으로 충분함
             
             file = self.drive.files().create(**params).execute()
             file_id = file.get('id')
@@ -293,10 +291,10 @@ class DriveUploader:
                 'includeItemsFromAllDrives': True,
             }
             
-            # Shared Drive ID가 있으면 사용
-            if SHARED_DRIVE_ID:
-                params['driveId'] = SHARED_DRIVE_ID
-                params['corpora'] = 'drive'
+            # files().list()에서 Shared Drive 검색 시
+            # driveId와 corpora를 함께 사용하거나, supportsAllDrives만으로도 가능
+            # parent_folder_id가 있으면 해당 폴더에서만 검색하므로 driveId 불필요
+            # driveId는 특정 드라이브 전체를 검색할 때만 필요
             
             results = self.drive.files().list(**params).execute()
             items = results.get('files', [])
