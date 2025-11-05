@@ -38,7 +38,7 @@ jobs:
         GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
       run: |
         python download_realdata.py --update-mode
-      continue-on-error: true  # 오류 발생 시에도 진행 상황 저장
+      continue-on-error: true
     
     - name: Upload progress file
       if: always()
