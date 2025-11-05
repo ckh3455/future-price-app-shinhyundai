@@ -21,14 +21,19 @@ from googleapiclient.errors import HttpError
 # 서비스 계정 파일 경로 (환경 변수 또는 직접 지정)
 SERVICE_ACCOUNT_FILE = os.getenv(
     "GOOGLE_SERVICE_ACCOUNT_FILE",
-    r"C:\Users\Hello\OneDrive\office work\naver crawling\naver-crawling-476404-fcf4b10bc63e 클라우드 서비스계정.txt"
+    r"D:\OneDrive\office work\naver crawling\naver-crawling-476404-fcf4b10bc63e 클라우드 서비스계정.txt"
 )
 
-# Shared Drive ID (환경 변수 또는 직접 지정)
-SHARED_DRIVE_ID = os.getenv("GOOGLE_SHARED_DRIVE_ID", "0APa-MWwUseXzUk9PVA")
+# "부동산자료" 폴더 ID (환경 변수 또는 직접 지정)
+# GDRIVE_FOLDER_ID는 "부동산자료" 폴더의 ID입니다
+GDRIVE_FOLDER_ID = os.getenv("GDRIVE_FOLDER_ID", "0APa-MWwUseXzUk9PVA")
 
-# 부모 폴더 경로 (부동산자료 > 부동산 실거래자료)
-PARENT_FOLDER_PATH = ["부동산자료", "부동산 실거래자료"]
+# Shared Drive ID는 폴더 정보에서 가져옵니다 (필요시)
+SHARED_DRIVE_ID = os.getenv("GOOGLE_SHARED_DRIVE_ID", None)
+
+# 부모 폴더 경로
+# GDRIVE_FOLDER_ID가 "부동산자료" 폴더이므로, 그 하위의 "부동산 실거래자료"만 찾으면 됩니다
+PARENT_FOLDER_PATH = ["부동산 실거래자료"]
 
 # Google Drive API 스코프
 SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -48,23 +53,25 @@ class DriveUploader:
             return True
             
         try:
-            # 서비스 계정 파일 읽기
-            if os.path.exists(SERVICE_ACCOUNT_FILE):
+            # 환경 변수 우선 확인 (GitHub Actions용)
+            service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+            
+            if service_account_json:
+                # 환경 변수에서 JSON 문자열로 읽기
+                creds = service_account.Credentials.from_service_account_info(
+                    json.loads(service_account_json),
+                    scopes=SCOPES
+                )
+            elif os.path.exists(SERVICE_ACCOUNT_FILE):
+                # 서비스 계정 파일 읽기 (로컬 실행용)
                 creds = service_account.Credentials.from_service_account_file(
                     SERVICE_ACCOUNT_FILE,
                     scopes=SCOPES
                 )
             else:
-                # 환경 변수에서 JSON 문자열로 읽기 (GitHub Actions용)
-                service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-                if not service_account_json:
-                    raise FileNotFoundError(
-                        f"서비스 계정 파일을 찾을 수 없습니다: {SERVICE_ACCOUNT_FILE}\n"
-                        "또는 GOOGLE_SERVICE_ACCOUNT_JSON 환경 변수를 설정하세요."
-                    )
-                creds = service_account.Credentials.from_service_account_info(
-                    json.loads(service_account_json),
-                    scopes=SCOPES
+                raise FileNotFoundError(
+                    f"서비스 계정 파일을 찾을 수 없습니다: {SERVICE_ACCOUNT_FILE}\n"
+                    "또는 GOOGLE_SERVICE_ACCOUNT_JSON 환경 변수를 설정하세요."
                 )
             
             self.drive = build('drive', 'v3', credentials=creds)
@@ -129,6 +136,7 @@ class DriveUploader:
                 'supportsAllDrives': True,
             }
             
+            # Shared Drive ID가 있으면 사용
             if SHARED_DRIVE_ID:
                 params['driveId'] = SHARED_DRIVE_ID
             
@@ -158,8 +166,29 @@ class DriveUploader:
     def get_folder_path_ids(self) -> Optional[Dict[str, str]]:
         """부모 폴더 경로의 각 폴더 ID 가져오기"""
         folder_ids = {}
-        current_parent = None
         
+        # GDRIVE_FOLDER_ID가 "부동산자료" 폴더 ID이므로 이를 시작점으로 사용
+        current_parent = GDRIVE_FOLDER_ID
+        
+        # "부동산자료" 폴더 정보 확인 및 Shared Drive ID 가져오기
+        try:
+            folder_info = self.drive.files().get(
+                fileId=GDRIVE_FOLDER_ID,
+                fields='id, name, driveId',
+                supportsAllDrives=True
+            ).execute()
+            
+            # Shared Drive ID 설정 (있으면)
+            global SHARED_DRIVE_ID
+            if folder_info.get('driveId'):
+                SHARED_DRIVE_ID = folder_info.get('driveId')
+            
+            print(f"  ✅ 부동산자료 폴더 확인: {folder_info.get('name')} (ID: {GDRIVE_FOLDER_ID})")
+        except Exception as e:
+            print(f"  ❌ 부동산자료 폴더 접근 실패: {e}")
+            return None
+        
+        # "부동산 실거래자료" 폴더 찾기
         for folder_name in PARENT_FOLDER_PATH:
             folder_id = self.find_folder_by_name(folder_name, current_parent)
             
@@ -215,6 +244,7 @@ class DriveUploader:
                 'supportsAllDrives': True,
             }
             
+            # Shared Drive ID가 있으면 사용
             if SHARED_DRIVE_ID:
                 params['driveId'] = SHARED_DRIVE_ID
             
@@ -263,6 +293,7 @@ class DriveUploader:
                 'includeItemsFromAllDrives': True,
             }
             
+            # Shared Drive ID가 있으면 사용
             if SHARED_DRIVE_ID:
                 params['driveId'] = SHARED_DRIVE_ID
                 params['corpora'] = 'drive'
