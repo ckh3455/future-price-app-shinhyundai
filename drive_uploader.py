@@ -105,6 +105,7 @@ class DriveUploader:
             # files().list()에서 parent_folder_id 조건이 있으면
             # 해당 폴더 내에서만 검색하므로 driveId 불필요
             # supportsAllDrives와 includeItemsFromAllDrives만으로 충분
+            # driveId는 절대 파라미터로 전달하지 않음!
             
             results = self.drive.files().list(**params).execute()
             items = results.get('files', [])
@@ -117,6 +118,13 @@ class DriveUploader:
             return None
         except HttpError as e:
             print(f"  ❌ 폴더 검색 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+        except Exception as e:
+            print(f"  ❌ 폴더 검색 중 예외 발생: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def create_folder(self, folder_name: str, parent_folder_id: str = None) -> Optional[str]:
@@ -175,6 +183,8 @@ class DriveUploader:
                 fileId=GDRIVE_FOLDER_ID,
                 fields='id, name, driveId',
                 supportsAllDrives=True
+                # files().get()에는 driveId 파라미터가 없음
+                # supportsAllDrives만으로 충분
             ).execute()
             
             # Shared Drive ID 설정 (있으면)
@@ -272,13 +282,21 @@ class DriveUploader:
             # 부모 폴더 경로 확인
             path_ids = self.get_folder_path_ids()
             if not path_ids:
+                print(f"  ⚠️  폴더 경로를 찾을 수 없습니다")
                 return False
             
             # 섹션별 폴더 찾기
+            # PARENT_FOLDER_PATH[-1] = "부동산 실거래자료" 폴더 ID
             section_parent_id = path_ids[PARENT_FOLDER_PATH[-1]]
+            if not section_parent_id:
+                print(f"  ⚠️  부모 폴더 ID를 찾을 수 없습니다")
+                return False
+            
+            # 섹션 폴더 찾기 (예: "아파트" 폴더)
             section_folder_id = self.find_folder_by_name(section_folder_name, section_parent_id)
             
             if not section_folder_id:
+                print(f"  ℹ️  섹션 폴더를 찾을 수 없습니다: {section_folder_name} (부모: {section_parent_id})")
                 return False
             
             # 파일 검색
@@ -292,17 +310,22 @@ class DriveUploader:
             }
             
             # files().list()에서 Shared Drive 검색 시
-            # driveId와 corpora를 함께 사용하거나, supportsAllDrives만으로도 가능
-            # parent_folder_id가 있으면 해당 폴더에서만 검색하므로 driveId 불필요
-            # driveId는 특정 드라이브 전체를 검색할 때만 필요
+            # supportsAllDrives와 includeItemsFromAllDrives만으로 충분
+            # driveId 파라미터는 사용하지 않음
             
             results = self.drive.files().list(**params).execute()
             items = results.get('files', [])
             
-            return len(items) > 0
+            found = len(items) > 0
+            if found:
+                print(f"  ✅ 파일 존재 확인: {file_name} (섹션: {section_folder_name})")
+            
+            return found
             
         except Exception as e:
             print(f"  ⚠️  파일 존재 확인 실패: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 
