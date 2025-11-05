@@ -416,9 +416,43 @@ def generate_monthly_dates(start_year: int = 2006, start_month: int = 1) -> List
 
 def load_progress() -> dict:
     """진행 상황 로드"""
+    # 먼저 로컬 파일 확인
     if PROGRESS_FILE.exists():
         with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            progress = json.load(f)
+            # 비어있지 않으면 사용
+            if progress:
+                return progress
+    
+    # 로컬 파일이 없거나 비어있으면 Google Drive에서 확인
+    if DRIVE_UPLOAD_ENABLED:
+        try:
+            log("📂 Google Drive에서 진행 상황 확인 중...")
+            uploader = get_uploader()
+            if uploader.init_service():
+                progress = {}
+                for property_type in PROPERTY_TYPES:
+                    prop_key = sanitize_folder_name(property_type)
+                    last_month = uploader.get_last_file_month(property_type)
+                    if last_month:
+                        year, month = last_month
+                        month_key = f"{year:04d}{month:02d}"
+                        progress[prop_key] = {
+                            "last_month": month_key,
+                            "last_update": datetime.now().isoformat()
+                        }
+                        log(f"  ✅ {property_type}: {month_key}까지 완료")
+                    else:
+                        log(f"  ℹ️  {property_type}: 파일 없음 (처음 시작)")
+                
+                if progress:
+                    # 로컬에도 저장
+                    save_progress(progress)
+                    log("💾 진행 상황을 로컬 파일에 저장했습니다.")
+                    return progress
+        except Exception as e:
+            log(f"⚠️  Google Drive 확인 실패: {e}")
+    
     return {}
 
 def save_progress(progress: dict):
