@@ -28,8 +28,9 @@ SERVICE_ACCOUNT_FILE = os.getenv(
 # GDRIVE_FOLDER_ID는 "부동산자료" 폴더의 ID입니다
 GDRIVE_FOLDER_ID = os.getenv("GDRIVE_FOLDER_ID", "0APa-MWwUseXzUk9PVA")
 
-# Shared Drive ID는 폴더 정보에서 가져옵니다 (필요시)
-SHARED_DRIVE_ID = os.getenv("GOOGLE_SHARED_DRIVE_ID", None)
+# Shared Drive ID는 폴더 정보에서 가져오지만, 파라미터로 사용하지 않음
+# 상위 폴더 ID(GDRIVE_FOLDER_ID)만으로 하위 폴더 접근 가능
+SHARED_DRIVE_ID = None  # 사용하지 않음
 
 # 부모 폴더 경로
 # GDRIVE_FOLDER_ID가 "부동산자료" 폴더이므로, 그 하위의 "부동산 실거래자료"만 찾으면 됩니다
@@ -177,20 +178,16 @@ class DriveUploader:
         # GDRIVE_FOLDER_ID가 "부동산자료" 폴더 ID이므로 이를 시작점으로 사용
         current_parent = GDRIVE_FOLDER_ID
         
-        # "부동산자료" 폴더 정보 확인 및 Shared Drive ID 가져오기
+            # "부동산자료" 폴더 정보 확인
+            # 상위 폴더 ID만으로 하위 폴더 접근 가능하므로 driveId 파라미터 불필요
         try:
             folder_info = self.drive.files().get(
                 fileId=GDRIVE_FOLDER_ID,
-                fields='id, name, driveId',
+                fields='id, name',
                 supportsAllDrives=True
-                # files().get()에는 driveId 파라미터가 없음
-                # supportsAllDrives만으로 충분
+                # 상위 폴더 ID만으로 하위 폴더 접근 가능
+                # driveId 파라미터는 사용하지 않음
             ).execute()
-            
-            # Shared Drive ID 설정 (있으면)
-            global SHARED_DRIVE_ID
-            if folder_info.get('driveId'):
-                SHARED_DRIVE_ID = folder_info.get('driveId')
             
             print(f"  ✅ 부동산자료 폴더 확인: {folder_info.get('name')} (ID: {GDRIVE_FOLDER_ID})")
         except Exception as e:
