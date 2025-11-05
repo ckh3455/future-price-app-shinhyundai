@@ -178,8 +178,8 @@ class DriveUploader:
         # GDRIVE_FOLDER_ID가 "부동산자료" 폴더 ID이므로 이를 시작점으로 사용
         current_parent = GDRIVE_FOLDER_ID
         
-            # "부동산자료" 폴더 정보 확인
-            # 상위 폴더 ID만으로 하위 폴더 접근 가능하므로 driveId 파라미터 불필요
+        # "부동산자료" 폴더 정보 확인
+        # 상위 폴더 ID만으로 하위 폴더 접근 가능하므로 driveId 파라미터 불필요
         try:
             folder_info = self.drive.files().get(
                 fileId=GDRIVE_FOLDER_ID,
@@ -277,10 +277,12 @@ class DriveUploader:
         """파일이 이미 존재하는지 확인"""
         try:
             # 부모 폴더 경로 확인
+            print(f"  [DEBUG] 폴더 경로 확인 시작...")
             path_ids = self.get_folder_path_ids()
             if not path_ids:
                 print(f"  ⚠️  폴더 경로를 찾을 수 없습니다")
                 return False
+            print(f"  [DEBUG] 폴더 경로 확인 완료: {path_ids}")
             
             # 섹션별 폴더 찾기
             # PARENT_FOLDER_PATH[-1] = "부동산 실거래자료" 폴더 ID
@@ -288,16 +290,20 @@ class DriveUploader:
             if not section_parent_id:
                 print(f"  ⚠️  부모 폴더 ID를 찾을 수 없습니다")
                 return False
+            print(f"  [DEBUG] 부모 폴더 ID: {section_parent_id}")
             
             # 섹션 폴더 찾기 (예: "아파트" 폴더)
+            print(f"  [DEBUG] 섹션 폴더 찾기: {section_folder_name}")
             section_folder_id = self.find_folder_by_name(section_folder_name, section_parent_id)
             
             if not section_folder_id:
                 print(f"  ℹ️  섹션 폴더를 찾을 수 없습니다: {section_folder_name} (부모: {section_parent_id})")
                 return False
+            print(f"  [DEBUG] 섹션 폴더 ID: {section_folder_id}")
             
             # 파일 검색
             query = f"name='{file_name}' and '{section_folder_id}' in parents and trashed=false"
+            print(f"  [DEBUG] 파일 검색 쿼리: {query}")
             
             params = {
                 'q': query,
@@ -305,6 +311,9 @@ class DriveUploader:
                 'supportsAllDrives': True,
                 'includeItemsFromAllDrives': True,
             }
+            
+            print(f"  [DEBUG] API 호출 파라미터: {params}")
+            print(f"  [DEBUG] driveId 파라미터 확인: {'driveId' in params}")
             
             # files().list()에서 Shared Drive 검색 시
             # supportsAllDrives와 includeItemsFromAllDrives만으로 충분
@@ -321,7 +330,9 @@ class DriveUploader:
             
         except Exception as e:
             print(f"  ⚠️  파일 존재 확인 실패: {e}")
+            print(f"  [ERROR] 예외 타입: {type(e).__name__}")
             import traceback
+            print("  [ERROR] 전체 traceback:")
             traceback.print_exc()
             return False
 
