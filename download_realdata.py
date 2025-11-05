@@ -684,11 +684,30 @@ def main():
             prop_key = sanitize_folder_name(property_type)
             last_completed = progress.get(prop_key, {}).get("last_month", "")
             
+            # 진행 상황 파일에 없으면 Google Drive에서 마지막 파일 찾기
+            if not last_completed and DRIVE_UPLOAD_ENABLED:
+                try:
+                    uploader = get_uploader()
+                    if uploader.init_service():
+                        last_file_info = uploader.get_last_file_month(property_type)
+                        if last_file_info:
+                            last_year, last_month = last_file_info
+                            last_completed = f"{last_year:04d}{last_month:02d}"
+                            log(f"📁 Google Drive에서 마지막 파일 발견: {last_year}년 {last_month}월")
+                            log(f"📌 다음 달부터 이어서 진행합니다...")
+                            # 진행 상황에 저장
+                            if prop_key not in progress:
+                                progress[prop_key] = {}
+                            progress[prop_key]["last_month"] = last_completed
+                            save_progress(progress)
+                except Exception as e:
+                    log(f"⚠️  Google Drive 확인 실패: {e}")
+            
             if last_completed:
                 log(f"📌 마지막 완료: {last_completed}")
                 log(f"🔄 이어서 진행합니다...")
             else:
-                log(f"🆕 처음 시작합니다")
+                log(f"🆕 처음 시작합니다 (2006년 1월부터)")
             
             # 각 월별로
             success_count = 0
