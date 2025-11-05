@@ -60,6 +60,18 @@ PROPERTY_TYPES = [
     "입주권"
 ]
 
+# 실제 페이지의 탭 이름 매핑 (페이지에는 슬래시가 있음)
+TAB_NAME_MAPPING = {
+    "아파트": "아파트",
+    "연립다세대": "연립/다세대",
+    "단독다가구": "단독/다가구",
+    "오피스텔": "오피스텔",
+    "토지": "토지",
+    "상업업무용": "상업/업무용",
+    "분양권": "분양/입주권",  # 페이지에서는 하나로 합쳐져 있음
+    "입주권": "분양/입주권",  # 페이지에서는 하나로 합쳐져 있음
+}
+
 # 진행 상황 파일
 PROGRESS_FILE = Path("download_progress.json")
 
@@ -144,7 +156,9 @@ def try_accept_alert(driver, timeout=3.0) -> bool:
 
 def select_property_tab(driver, tab_name: str) -> bool:
     """부동산 종목 탭 선택 - 강화 버전"""
-    log(f"  탭 선택: {tab_name}")
+    # 실제 페이지의 탭 이름으로 변환
+    actual_tab_name = TAB_NAME_MAPPING.get(tab_name, tab_name)
+    log(f"  탭 선택: {tab_name} (페이지: {actual_tab_name})")
     
     # xls.do 페이지인지 확인
     if "xls.do" not in driver.current_url:
@@ -154,24 +168,42 @@ def select_property_tab(driver, tab_name: str) -> bool:
         try_accept_alert(driver, 2.0)
     
     # 페이지가 완전히 로드될 때까지 대기
-    time.sleep(2)
+    time.sleep(3)
+    try_accept_alert(driver, 2.0)
     
-    # 다양한 방법으로 탭 찾기
+    # 방법 1: 다양한 XPath 선택자 시도 (실제 탭 이름 사용)
     selectors = [
-        f"//ul[@class='quarter-tab-cover']//a[contains(text(), '{tab_name}')]",
-        f"//a[contains(text(), '{tab_name}')]",
-        f"//a[text()='{tab_name}']"
+        f"//ul[@class='quarter-tab-cover']//a[contains(text(), '{actual_tab_name}')]",
+        f"//ul[@class='quarter-tab-cover']//a[normalize-space(text())='{actual_tab_name}']",
+        f"//a[contains(text(), '{actual_tab_name}')]",
+        f"//a[normalize-space(text())='{actual_tab_name}']",
+        f"//a[text()='{actual_tab_name}']",
+        f"//li//a[contains(text(), '{actual_tab_name}')]",
+        f"//*[@class='tab']//a[contains(text(), '{actual_tab_name}')]",
+        f"//*[contains(@class, 'tab')]//a[contains(text(), '{actual_tab_name}')]",
     ]
     
     for idx, selector in enumerate(selectors, 1):
         try:
-            log(f"  🔍 탭 찾기 시도 {idx}/{len(selectors)}")
+            log(f"  🔍 탭 찾기 시도 {idx}/{len(selectors)} (XPath)")
             elem = driver.find_element(By.XPATH, selector)
+            
+            # 요소가 보이는지 확인
+            if not elem.is_displayed():
+                log(f"  ⚠️  요소가 보이지 않음, 스크롤 시도...")
+                driver.execute_script("arguments[0].scrollIntoView({block:'center', behavior:'smooth'});", elem)
+                time.sleep(1)
             
             # 스크롤 및 클릭
             driver.execute_script("arguments[0].scrollIntoView({block:'center'});", elem)
             time.sleep(0.5)
-            elem.click()
+            
+            # JavaScript로 클릭 시도
+            try:
+                driver.execute_script("arguments[0].click();", elem)
+            except:
+                elem.click()
+            
             time.sleep(2)
             try_accept_alert(driver, 2.0)
             
@@ -180,11 +212,137 @@ def select_property_tab(driver, tab_name: str) -> bool:
             
         except Exception as e:
             if idx == len(selectors):
-                log(f"  ❌ 탭 선택 실패: {e}")
+                log(f"  ⏭️  XPath 선택자 모두 실패, 다른 방법 시도...")
             else:
-                log(f"  ⏭️  다음 선택자 시도...")
-            continue
+                continue
     
+    # 방법 2: 모든 링크를 찾아서 텍스트로 비교
+    try:
+        log(f"  🔍 모든 링크 검색 중...")
+        all_links = driver.find_elements(By.TAG_NAME, "a")
+        log(f"  📋 발견된 링크: {len(all_links)}개")
+        
+        # 디버깅: 모든 링크 텍스트 출력 (처음 20개만)
+        link_texts = []
+        for link in all_links[:20]:
+            try:
+                link_text = link.text.strip()
+                if link_text:
+                    link_texts.append(link_text)
+            except:
+                pass
+        
+        if link_texts:
+            log(f"  📝 링크 텍스트 샘플: {link_texts}")
+        
+        # 부분 매칭 시도 (더 유연하게)
+        for link in all_links:
+            try:
+                link_text = link.text.strip()
+                # 정확히 일치하거나, 부분 일치, 또는 공백 제거 후 일치
+                normalized_link = link_text.replace(" ", "").replace("\n", "").replace("\t", "")
+                normalized_tab = actual_tab_name.replace(" ", "").replace("\n", "").replace("\t", "")
+                
+                if (actual_tab_name in link_text or 
+                    link_text == actual_tab_name or 
+                    normalized_tab in normalized_link or
+                    normalized_link == normalized_tab or
+                    tab_name in link_text):  # 원본 이름도 시도
+                    log(f"  ✅ 링크 발견: '{link_text}' (원본: '{tab_name}')")
+                    
+                    # 요소가 보이는지 확인
+                    if not link.is_displayed():
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center', behavior:'smooth'});", link)
+                        time.sleep(1)
+                    
+                    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link)
+                    time.sleep(0.5)
+                    
+                    # JavaScript로 클릭 시도
+                    try:
+                        driver.execute_script("arguments[0].click();", link)
+                    except:
+                        link.click()
+                    
+                    time.sleep(2)
+                    try_accept_alert(driver, 2.0)
+                    
+                    log(f"  ✅ 탭 선택 완료: {tab_name}")
+                    return True
+            except Exception as e:
+                continue
+        
+        # 더 많은 링크 확인 (20개 이후)
+        if len(all_links) > 20:
+            log(f"  🔍 나머지 {len(all_links) - 20}개 링크 확인 중...")
+            for link in all_links[20:]:
+                try:
+                    link_text = link.text.strip()
+                    normalized_link = link_text.replace(" ", "").replace("\n", "").replace("\t", "")
+                    normalized_tab = actual_tab_name.replace(" ", "").replace("\n", "").replace("\t", "")
+                    
+                    if (actual_tab_name in link_text or 
+                        link_text == actual_tab_name or 
+                        normalized_tab in normalized_link or
+                        normalized_link == normalized_tab or
+                        tab_name in link_text):  # 원본 이름도 시도
+                        log(f"  ✅ 링크 발견: '{link_text}' (원본: '{tab_name}')")
+                        
+                        if not link.is_displayed():
+                            driver.execute_script("arguments[0].scrollIntoView({block:'center', behavior:'smooth'});", link)
+                            time.sleep(1)
+                        
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link)
+                        time.sleep(0.5)
+                        
+                        try:
+                            driver.execute_script("arguments[0].click();", link)
+                        except:
+                            link.click()
+                        
+                        time.sleep(2)
+                        try_accept_alert(driver, 2.0)
+                        
+                        log(f"  ✅ 탭 선택 완료: {tab_name}")
+                        return True
+                except:
+                    continue
+                    
+    except Exception as e:
+        log(f"  ⚠️  링크 검색 실패: {e}")
+    
+    # 방법 3: CSS 선택자로 시도
+    try:
+        log(f"  🔍 CSS 선택자 시도...")
+        css_selectors = [
+            f"a:contains('{tab_name}')",  # 일부 브라우저에서만 작동
+            f"a[href*='{tab_name.lower()}']",
+        ]
+        
+        # CSS 선택자 대신 JavaScript로 찾기
+        script = f"""
+        var links = document.querySelectorAll('a');
+        var targetTab = '{actual_tab_name}';
+        for (var i = 0; i < links.length; i++) {{
+            var text = links[i].textContent.trim();
+            if (text === targetTab || text.includes(targetTab) || text === '{tab_name}' || text.includes('{tab_name}')) {{
+                links[i].scrollIntoView({{block: 'center'}});
+                links[i].click();
+                return true;
+            }}
+        }}
+        return false;
+        """
+        result = driver.execute_script(script)
+        if result:
+            time.sleep(2)
+            try_accept_alert(driver, 2.0)
+            log(f"  ✅ 탭 선택 완료 (JavaScript): {tab_name}")
+            return True
+    except Exception as e:
+        log(f"  ⚠️  JavaScript 클릭 실패: {e}")
+    
+    log(f"  ❌ 탭 선택 실패: 모든 방법 시도 완료")
     return False
 
 def find_date_inputs(driver) -> Tuple[object, object]:
@@ -277,7 +435,7 @@ def click_excel_download(driver) -> bool:
         log(f"  ❌ 다운 버튼 클릭 실패: {e}")
         return False
 
-def wait_for_download(timeout: int = 30, baseline_files: set = None) -> Optional[Path]:
+def wait_for_download(timeout: int = 10, baseline_files: set = None) -> Optional[Path]:
     """다운로드 완료 대기 - 개선된 감지 로직"""
     start_time = time.time()
     
@@ -329,8 +487,8 @@ def wait_for_download(timeout: int = 30, baseline_files: set = None) -> Optional
             
             # 파일이 있고 크기가 1KB 이상이면
             if size > 1000:
-                # 크기 안정화 확인 (0.5초 대기)
-                time.sleep(0.5)
+                # 크기 안정화 확인 (5초 대기)
+                time.sleep(5)
                 new_size = latest.stat().st_size
                 
                 # 크기가 안정화되면 성공
@@ -431,19 +589,57 @@ def load_progress() -> dict:
             uploader = get_uploader()
             if uploader.init_service():
                 progress = {}
+                today = date.today()
+                
                 for property_type in PROPERTY_TYPES:
                     prop_key = sanitize_folder_name(property_type)
-                    last_month = uploader.get_last_file_month(property_type)
-                    if last_month:
-                        year, month = last_month
-                        month_key = f"{year:04d}{month:02d}"
+                    
+                    # 모든 파일의 년월 확인
+                    all_months = uploader.get_all_file_months(property_type)
+                    
+                    if not all_months:
+                        log(f"  ℹ️  {property_type}: 파일 없음 (처음 시작)")
+                        continue
+                    
+                    # 2006-01부터 현재까지 빠진 파일 찾기
+                    expected_months = set()
+                    current = date(2006, 1, 1)
+                    while current <= today:
+                        expected_months.add((current.year, current.month))
+                        if current.month == 12:
+                            current = date(current.year + 1, 1, 1)
+                        else:
+                            current = date(current.year, current.month + 1, 1)
+                    
+                    missing_months = expected_months - all_months
+                    
+                    if missing_months:
+                        # 빠진 파일이 있으면 가장 오래된 빠진 파일부터 시작
+                        oldest_missing = min(missing_months)
+                        last_year, last_month = oldest_missing
+                        # 가장 오래된 빠진 파일의 이전 달까지 완료된 것으로 표시
+                        if last_month == 1:
+                            completed_year = last_year - 1
+                            completed_month = 12
+                        else:
+                            completed_year = last_year
+                            completed_month = last_month - 1
+                        month_key = f"{completed_year:04d}{completed_month:02d}"
+                        progress[prop_key] = {
+                            "last_month": month_key,
+                            "last_update": datetime.now().isoformat(),
+                            "missing_count": len(missing_months)
+                        }
+                        log(f"  ⚠️  {property_type}: {month_key}까지 완료, {len(missing_months)}개 파일 누락 ({oldest_missing[0]:04d}-{oldest_missing[1]:02d}부터 필요)")
+                    else:
+                        # 모든 파일이 있으면 가장 최근 파일
+                        last_year, last_month = max(all_months)
+                        month_key = f"{last_year:04d}{last_month:02d}"
                         progress[prop_key] = {
                             "last_month": month_key,
                             "last_update": datetime.now().isoformat()
                         }
-                        log(f"  ✅ {property_type}: {month_key}까지 완료")
-                    else:
-                        log(f"  ℹ️  {property_type}: 파일 없음 (처음 시작)")
+                        log(f"  ✅ {property_type}: {month_key}까지 완료 (모든 파일 존재)")
                 
                 if progress:
                     # 로컬에도 저장
@@ -452,6 +648,8 @@ def load_progress() -> dict:
                     return progress
         except Exception as e:
             log(f"⚠️  Google Drive 확인 실패: {e}")
+            import traceback
+            traceback.print_exc()
     
     return {}
 
@@ -543,8 +741,8 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
                 continue
             return False
         
-        # 다운로드 대기 (30초)
-        downloaded = wait_for_download(timeout=30, baseline_files=baseline_files)
+        # 다운로드 대기 (10초)
+        downloaded = wait_for_download(timeout=10, baseline_files=baseline_files)
         
         if downloaded:
             # 성공! 이동 및 이름 변경
@@ -616,10 +814,16 @@ def main():
     
     # 모드 결정
     if args.update_mode:
-        # 강제 업데이트 모드
-        update_mode = True
-        log("🔄 강제 업데이트 모드: 최근 1년치만 갱신")
-        properties_to_download = PROPERTY_TYPES  # 모든 섹션 처리
+        # 강제 업데이트 모드이지만, 파일이 없는 섹션이 있으면 전체 다운로드
+        if not properties_to_download:
+            # 모든 섹션이 완료되었으면 업데이트 모드
+            update_mode = True
+            log("🔄 강제 업데이트 모드: 최근 1년치만 갱신")
+            properties_to_download = PROPERTY_TYPES  # 모든 섹션 처리
+        else:
+            # 파일이 없는 섹션이 있으면 전체 다운로드 모드
+            update_mode = False
+            log(f"📥 전체 다운로드 모드: {len(properties_to_download)}개 섹션 (2006-01부터)")
     elif not properties_to_download:
         # 모든 섹션이 완료되었으면 업데이트 모드로 전환
         update_mode = True
@@ -685,11 +889,38 @@ def main():
             prop_key = sanitize_folder_name(property_type)
             last_completed = progress.get(prop_key, {}).get("last_month", "")
             
+            # 이 섹션에 대한 월별 날짜 범위 생성
+            if update_mode:
+                # 업데이트 모드: 최근 1년만 갱신 (last_completed와 무관하게)
+                today = date.today()
+                start_year = today.year - 1
+                start_month = today.month
+                section_monthly_dates = generate_monthly_dates(start_year, start_month)
+            else:
+                # 전체 다운로드 모드: 2006-01부터
+                if last_completed:
+                    # last_completed 다음 달부터 시작
+                    last_year = int(last_completed[:4])
+                    last_month = int(last_completed[4:6])
+                    if last_month == 12:
+                        start_year = last_year + 1
+                        start_month = 1
+                    else:
+                        start_year = last_year
+                        start_month = last_month + 1
+                else:
+                    # 파일이 없으면 2006-01부터
+                    start_year = 2006
+                    start_month = 1
+                section_monthly_dates = generate_monthly_dates(start_year, start_month)
+            
             if last_completed:
                 log(f"📌 마지막 완료: {last_completed}")
-                log(f"🔄 이어서 진행합니다...")
+                log(f"🔄 이어서 진행합니다... ({start_year:04d}-{start_month:02d}부터)")
             else:
-                log(f"🆕 처음 시작합니다")
+                log(f"🆕 처음 시작합니다 ({start_year:04d}-{start_month:02d}부터)")
+            
+            log(f"📅 다운로드 예정: {len(section_monthly_dates)}개월")
             
             # 각 월별로
             success_count = 0
@@ -697,19 +928,12 @@ def main():
             consecutive_fails = 0
             skipped_count = 0
             
-            for month_idx, (start_date, end_date) in enumerate(monthly_dates, 1):
+            for month_idx, (start_date, end_date) in enumerate(section_monthly_dates, 1):
                 year = start_date.year
                 month = start_date.month
                 month_key = f"{year:04d}{month:02d}"
                 
-                # 이미 완료한 달 스킵
-                if last_completed and month_key <= last_completed:
-                    skipped_count += 1
-                    if skipped_count == 1:
-                        log(f"\n⏭️  이미 완료된 월들을 건너뜁니다...")
-                    continue
-                
-                log(f"\n[{month_idx}/{len(monthly_dates)}]", end=" ")
+                log(f"\n[{month_idx}/{len(section_monthly_dates)}]", end=" ")
                 
                 # 다운로드 시도 (최대 3회 재시도)
                 success = download_single_month_with_retry(driver, property_type, start_date, end_date, max_retries=3)

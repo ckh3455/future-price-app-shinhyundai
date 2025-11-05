@@ -211,117 +211,186 @@ class DriveUploader:
         
         return folder_ids
     
-    def upload_file(self, local_file_path: Path, file_name: str, section_folder_name: str) -> Optional[str]:
-        """파일 업로드"""
+    def upload_file(self, local_file_path: Path, file_name: str, section_folder_name: str, max_retries: int = 3) -> Optional[str]:
+        """파일 업로드 (재시도 로직 포함)"""
         if not self.drive:
             print("❌ Drive 서비스가 초기화되지 않았습니다.")
             return None
         
-        try:
-            # 1. 부모 폴더 경로 확인
-            path_ids = self.get_folder_path_ids()
-            if not path_ids:
+        # 파일 크기 확인
+        file_size = local_file_path.stat().st_size
+        print(f"  📤 파일 업로드 시작: {file_name} ({file_size:,} bytes)")
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                # 1. 부모 폴더 경로 확인
+                path_ids = self.get_folder_path_ids()
+                if not path_ids:
+                    print(f"  ⚠️  폴더 경로를 찾을 수 없습니다.")
+                    return None
+                
+                # 2. 섹션별 폴더 찾기 또는 생성
+                section_parent_id = path_ids[PARENT_FOLDER_PATH[-1]]  # "부동산 실거래자료" 폴더 ID
+                section_folder_id = self.get_or_create_folder(section_folder_name, section_parent_id)
+                
+                if not section_folder_id:
+                    print(f"  ❌ 섹션 폴더를 찾거나 생성할 수 없습니다: {section_folder_name}")
+                    return None
+                
+                # 3. 파일 업로드
+                file_metadata = {
+                    'name': file_name,
+                    'parents': [section_folder_id],
+                }
+                
+                media = MediaFileUpload(
+                    str(local_file_path),
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    resumable=True
+                )
+                
+                params = {
+                    'body': file_metadata,
+                    'media_body': media,
+                    'fields': 'id, name, webViewLink, size',
+                    'supportsAllDrives': True,  # Shared Drive 지원 필수
+                }
+                
+                if attempt > 1:
+                    print(f"  🔄 재시도 {attempt}/{max_retries}...")
+                
+                file = self.drive.files().create(**params).execute()
+                file_id = file.get('id')
+                
+                print(f"  ✅ Google Drive 업로드 완료: {file_name}")
+                print(f"     파일 ID: {file_id}")
+                print(f"     링크: {file.get('webViewLink', 'N/A')}")
+                
+                return file_id
+                
+            except HttpError as e:
+                error_details = e.error_details if hasattr(e, 'error_details') else []
+                print(f"  ❌ 파일 업로드 실패 (시도 {attempt}/{max_retries}): {e}")
+                
+                if e.resp.status == 404:
+                    print("     파일을 찾을 수 없습니다.")
+                    return None
+                elif e.resp.status == 403:
+                    print("     권한이 없습니다. Shared Drive 멤버 권한을 확인하세요.")
+                    print(f"     상세: {error_details}")
+                    return None
+                elif e.resp.status == 429:
+                    # Rate limit - 재시도
+                    wait_time = 2 ** attempt
+                    print(f"     Rate limit 도달. {wait_time}초 후 재시도...")
+                    if attempt < max_retries:
+                        import time
+                        time.sleep(wait_time)
+                        continue
+                    return None
+                elif e.resp.status >= 500:
+                    # 서버 오류 - 재시도
+                    wait_time = 2 ** attempt
+                    print(f"     서버 오류 (HTTP {e.resp.status}). {wait_time}초 후 재시도...")
+                    if attempt < max_retries:
+                        import time
+                        time.sleep(wait_time)
+                        continue
+                    return None
+                else:
+                    print(f"     HTTP 상태 코드: {e.resp.status}")
+                    print(f"     상세: {error_details}")
+                    if attempt < max_retries:
+                        import time
+                        time.sleep(2 ** attempt)
+                        continue
+                    return None
+                    
+            except Exception as e:
+                print(f"  ❌ 업로드 중 오류 발생 (시도 {attempt}/{max_retries}): {e}")
+                import traceback
+                print(f"  [ERROR] 상세:")
+                traceback.print_exc()
+                
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt
+                    print(f"  ⏳ {wait_time}초 후 재시도...")
+                    import time
+                    time.sleep(wait_time)
+                    continue
                 return None
-            
-            # 2. 섹션별 폴더 찾기 또는 생성
-            section_parent_id = path_ids[PARENT_FOLDER_PATH[-1]]  # "부동산 실거래자료" 폴더 ID
-            section_folder_id = self.get_or_create_folder(section_folder_name, section_parent_id)
-            
-            if not section_folder_id:
-                print(f"❌ 섹션 폴더를 찾거나 생성할 수 없습니다: {section_folder_name}")
-                return None
-            
-            # 3. 파일 업로드
-            file_metadata = {
-                'name': file_name,
-                'parents': [section_folder_id],
-            }
-            
-            media = MediaFileUpload(
-                str(local_file_path),
-                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                resumable=True
-            )
-            
-            params = {
-                'body': file_metadata,
-                'media_body': media,  # media_body가 올바른 파라미터 이름
-                'fields': 'id, name, webViewLink, size',
-                'supportsAllDrives': True,  # Shared Drive 지원 필수
-            }
-            
-            # files().create()에는 driveId 파라미터가 없음
-            # supportsAllDrives만으로 충분함
-            
-            file = self.drive.files().create(**params).execute()
-            file_id = file.get('id')
-            
-            print(f"  ✅ Google Drive 업로드 완료: {file_name}")
-            print(f"     파일 ID: {file_id}")
-            print(f"     링크: {file.get('webViewLink', 'N/A')}")
-            
-            return file_id
-            
-        except HttpError as e:
-            print(f"  ❌ 파일 업로드 실패: {e}")
-            if e.resp.status == 404:
-                print("     파일을 찾을 수 없습니다.")
-            elif e.resp.status == 403:
-                print("     권한이 없습니다. Shared Drive 멤버 권한을 확인하세요.")
-            return None
-        except Exception as e:
-            print(f"  ❌ 업로드 중 오류 발생: {e}")
-            return None
+        
+        print(f"  ❌ {max_retries}회 시도 모두 실패")
+        return None
     
-    def get_last_file_month(self, section_folder_name: str) -> Optional[Tuple[int, int]]:
-        """섹션 폴더에서 가장 최근 파일의 년월 찾기 (예: (2024, 12))"""
+    def get_all_file_months(self, section_folder_name: str) -> set:
+        """섹션 폴더에서 모든 파일의 년월을 set으로 반환 (예: {(2024, 12), (2024, 11), ...})"""
         try:
             # 부모 폴더 경로 확인
             path_ids = self.get_folder_path_ids()
             if not path_ids:
-                return None
+                return set()
             
             # 섹션별 폴더 찾기
             section_parent_id = path_ids[PARENT_FOLDER_PATH[-1]]
             section_folder_id = self.find_folder_by_name(section_folder_name, section_parent_id)
             
             if not section_folder_id:
-                return None
+                return set()
             
-            # 모든 파일 검색 (파일명으로 정렬)
-            query = f"'{section_folder_id}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'"
+            # 모든 파일 검색 (페이지네이션 처리)
+            all_items = []
+            page_token = None
             
-            params = {
-                'q': query,
-                'fields': 'files(id, name)',
-                'orderBy': 'name desc',  # 파일명 내림차순
-                'pageSize': 100,  # 최대 100개 파일 확인
-                'supportsAllDrives': True,
-                'includeItemsFromAllDrives': True,
-            }
+            while True:
+                query = f"'{section_folder_id}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'"
+                
+                params = {
+                    'q': query,
+                    'fields': 'nextPageToken, files(id, name)',
+                    'pageSize': 1000,  # 최대 1000개
+                    'supportsAllDrives': True,
+                    'includeItemsFromAllDrives': True,
+                }
+                
+                if page_token:
+                    params['pageToken'] = page_token
+                
+                results = self.drive.files().list(**params).execute()
+                items = results.get('files', [])
+                all_items.extend(items)
+                
+                page_token = results.get('nextPageToken')
+                if not page_token:
+                    break
             
-            results = self.drive.files().list(**params).execute()
-            items = results.get('files', [])
+            if not all_items:
+                return set()
             
-            if not items:
-                return None
-            
-            # 파일명에서 년월 추출 (예: "아파트 202412.xlsx" -> 2024, 12)
+            # 파일명에서 년월 추출
             import re
-            for item in items:
+            months = set()
+            for item in all_items:
                 name = item.get('name', '')
                 # 파일명 형식: "{섹션명} YYYYMM.xlsx"
                 match = re.search(r'(\d{4})(\d{2})\.xlsx', name)
                 if match:
                     year = int(match.group(1))
                     month = int(match.group(2))
-                    return (year, month)
+                    months.add((year, month))
             
-            return None
+            return months
             
         except Exception as e:
-            print(f"  ⚠️  최근 파일 확인 실패: {e}")
+            print(f"  ⚠️  파일 목록 확인 실패: {e}")
+            return set()
+    
+    def get_last_file_month(self, section_folder_name: str) -> Optional[Tuple[int, int]]:
+        """섹션 폴더에서 가장 최근 파일의 년월 찾기 (예: (2024, 12))"""
+        all_months = self.get_all_file_months(section_folder_name)
+        if not all_months:
             return None
+        return max(all_months)  # 가장 최근 년월 반환
     
     def check_file_exists(self, file_name: str, section_folder_name: str) -> bool:
         """파일이 이미 존재하는지 확인"""
