@@ -262,6 +262,7 @@ def select_property_tab(driver, tab_name: str) -> bool:
         driver.get(MOLIT_URL)
         time.sleep(5)  # 페이지 로딩 대기 증가
         try_accept_alert(driver, 2.0)
+        remove_google_translate_popup(driver)
     
     # 페이지가 완전히 로드될 때까지 대기
     time.sleep(3)
@@ -269,6 +270,14 @@ def select_property_tab(driver, tab_name: str) -> bool:
     
     # Google Translate 팝업 제거
     remove_google_translate_popup(driver)
+    
+    # 페이지 URL 재확인 (다른 페이지로 이동했을 수 있음)
+    if "xls.do" not in driver.current_url:
+        log(f"  ⚠️  페이지가 xls.do가 아닙니다. 다시 로딩... ({driver.current_url})")
+        driver.get(MOLIT_URL)
+        time.sleep(5)
+        try_accept_alert(driver, 2.0)
+        remove_google_translate_popup(driver)
     
     # 탭 ID 매핑 (실제 페이지 구조 기반)
     TAB_ID_MAPPING = {
@@ -1616,8 +1625,18 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
                 # 재시도 전 페이지 새로고침
                 log(f"  🔄 페이지 새로고침 중...")
                 driver.get(MOLIT_URL)
-                time.sleep(3)
+                time.sleep(8)  # 페이지 완전 로딩 대기 (증가)
                 try_accept_alert(driver, 2.0)
+                remove_google_translate_popup(driver)
+                
+                # 페이지 URL 확인
+                if "xls.do" not in driver.current_url:
+                    log(f"  ⚠️  페이지가 xls.do가 아닙니다. 다시 로딩... ({driver.current_url})")
+                    driver.get(MOLIT_URL)
+                    time.sleep(8)
+                    try_accept_alert(driver, 2.0)
+                    remove_google_translate_popup(driver)
+                
                 # 탭 재선택
                 if not select_property_tab(driver, property_type):
                     log(f"  ⚠️  탭 재선택 실패")
@@ -1657,8 +1676,18 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
                     # 재시도 전 페이지 새로고침
                     log(f"  🔄 페이지 새로고침 중...")
                     driver.get(MOLIT_URL)
-                    time.sleep(3)
+                    time.sleep(8)  # 페이지 완전 로딩 대기 (증가)
                     try_accept_alert(driver, 2.0)
+                    remove_google_translate_popup(driver)
+                    
+                    # 페이지 URL 확인
+                    if "xls.do" not in driver.current_url:
+                        log(f"  ⚠️  페이지가 xls.do가 아닙니다. 다시 로딩... ({driver.current_url})")
+                        driver.get(MOLIT_URL)
+                        time.sleep(8)
+                        try_accept_alert(driver, 2.0)
+                        remove_google_translate_popup(driver)
+                    
                     # 탭 재선택
                     if not select_property_tab(driver, property_type):
                         log(f"  ⚠️  탭 재선택 실패")
@@ -1672,8 +1701,18 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
                 # 재시도 전 페이지 새로고침
                 log(f"  🔄 페이지 새로고침 중...")
                 driver.get(MOLIT_URL)
-                time.sleep(3)
+                time.sleep(8)  # 페이지 완전 로딩 대기 (증가)
                 try_accept_alert(driver, 2.0)
+                remove_google_translate_popup(driver)
+                
+                # 페이지 URL 확인
+                if "xls.do" not in driver.current_url:
+                    log(f"  ⚠️  페이지가 xls.do가 아닙니다. 다시 로딩... ({driver.current_url})")
+                    driver.get(MOLIT_URL)
+                    time.sleep(8)
+                    try_accept_alert(driver, 2.0)
+                    remove_google_translate_popup(driver)
+                
                 # 탭 재선택
                 if not select_property_tab(driver, property_type):
                     log(f"  ⚠️  탭 재선택 실패")
@@ -1878,9 +1917,18 @@ def main():
                         try:
                             log(f"  🔄 페이지 재로딩 및 탭 재선택... (시도 {retry_count + 1}/3)")
                             driver.get(MOLIT_URL)
-                            time.sleep(5)  # 페이지 완전 로딩 대기
+                            time.sleep(8)  # 페이지 완전 로딩 대기 (증가)
                             try_accept_alert(driver, 2.0)
                             remove_google_translate_popup(driver)
+                            
+                            # 페이지 URL 확인
+                            if "xls.do" not in driver.current_url:
+                                log(f"  ⚠️  페이지가 xls.do가 아닙니다. 다시 로딩... ({driver.current_url})")
+                                driver.get(MOLIT_URL)
+                                time.sleep(8)
+                                try_accept_alert(driver, 2.0)
+                                remove_google_translate_popup(driver)
+                            
                             if select_property_tab(driver, property_type):
                                 tab_selected = True
                                 # 탭 선택 후 페이지가 완전히 준비될 때까지 대기
