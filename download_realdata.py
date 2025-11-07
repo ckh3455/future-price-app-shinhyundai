@@ -319,6 +319,35 @@ def select_property_tab(driver, tab_name: str) -> bool:
             if "on" in parent_class_after:
                 # 탭 선택 후 Google Translate 팝업 제거
                 remove_google_translate_popup(driver)
+                
+                # ✅ 추가: 페이지가 완전히 준비될 때까지 대기
+                log(f"  ⏳ 탭 선택 후 페이지 준비 대기 중...")
+                
+                # 날짜 입력 필드가 준비될 때까지 반복 확인 (최대 10초)
+                date_field_ready = False
+                for wait_attempt in range(10):  # 최대 10번 시도 (총 10초)
+                    try:
+                        date_field = driver.find_element(By.CSS_SELECTOR, "#srchBgnDe")
+                        if date_field.is_displayed() and date_field.is_enabled():
+                            # 추가 검증: 값이 설정 가능한지 확인
+                            try:
+                                driver.execute_script("arguments[0].value = '2024-01-01';", date_field)
+                                driver.execute_script("arguments[0].value = '';", date_field)
+                                date_field_ready = True
+                                log(f"  ✅ 페이지 준비 완료 ({wait_attempt + 1}번째 시도)")
+                                break
+                            except:
+                                pass
+                    except:
+                        pass
+                    time.sleep(1.0)
+                
+                if not date_field_ready:
+                    log(f"  ⚠️  날짜 입력 필드 확인 실패, 계속 진행...")
+                else:
+                    # 추가 안정화 대기 (폼이 완전히 초기화될 시간)
+                    time.sleep(2.0)
+                
                 log(f"  ✅ 탭 선택 완료 (ID): {tab_name}")
                 return True
             else:
@@ -332,6 +361,35 @@ def select_property_tab(driver, tab_name: str) -> bool:
                 if "on" in parent_class_after2:
                     # 탭 선택 후 Google Translate 팝업 제거
                     remove_google_translate_popup(driver)
+                    
+                    # ✅ 추가: 페이지가 완전히 준비될 때까지 대기
+                    log(f"  ⏳ 탭 선택 후 페이지 준비 대기 중...")
+                    
+                    # 날짜 입력 필드가 준비될 때까지 반복 확인 (최대 10초)
+                    date_field_ready = False
+                    for wait_attempt in range(10):  # 최대 10번 시도 (총 10초)
+                        try:
+                            date_field = driver.find_element(By.CSS_SELECTOR, "#srchBgnDe")
+                            if date_field.is_displayed() and date_field.is_enabled():
+                                # 추가 검증: 값이 설정 가능한지 확인
+                                try:
+                                    driver.execute_script("arguments[0].value = '2024-01-01';", date_field)
+                                    driver.execute_script("arguments[0].value = '';", date_field)
+                                    date_field_ready = True
+                                    log(f"  ✅ 페이지 준비 완료 ({wait_attempt + 1}번째 시도)")
+                                    break
+                                except:
+                                    pass
+                        except:
+                            pass
+                        time.sleep(1.0)
+                    
+                    if not date_field_ready:
+                        log(f"  ⚠️  날짜 입력 필드 확인 실패, 계속 진행...")
+                    else:
+                        # 추가 안정화 대기 (폼이 완전히 초기화될 시간)
+                        time.sleep(2.0)
+                    
                     log(f"  ✅ 탭 선택 완료 (ID, 재시도): {tab_name}")
                     return True
                 else:
@@ -1706,6 +1764,10 @@ def main():
             if not select_property_tab(driver, property_type):
                 log(f"⚠️  탭 선택 실패, 다음 종목으로...")
                 continue
+            
+            # ✅ 추가: 탭 선택 후 첫 번째 다운로드 전 추가 안정화 대기
+            log(f"  ⏳ 첫 번째 다운로드 전 페이지 안정화 대기...")
+            time.sleep(3.0)
             
             # 진행 상황 확인
             prop_key = sanitize_folder_name(property_type)
