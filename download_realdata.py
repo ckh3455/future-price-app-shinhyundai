@@ -323,9 +323,9 @@ def select_property_tab(driver, tab_name: str) -> bool:
                 # ✅ 추가: 페이지가 완전히 준비될 때까지 대기
                 log(f"  ⏳ 탭 선택 후 페이지 준비 대기 중...")
                 
-                # 날짜 입력 필드가 준비될 때까지 반복 확인 (최대 10초)
+                # 날짜 입력 필드가 준비될 때까지 반복 확인 (최대 2초)
                 date_field_ready = False
-                for wait_attempt in range(10):  # 최대 10번 시도 (총 10초)
+                for wait_attempt in range(2):  # 최대 2번 시도 (총 2초)
                     try:
                         date_field = driver.find_element(By.CSS_SELECTOR, "#srchBgnDe")
                         if date_field.is_displayed() and date_field.is_enabled():
@@ -346,7 +346,7 @@ def select_property_tab(driver, tab_name: str) -> bool:
                     log(f"  ⚠️  날짜 입력 필드 확인 실패, 계속 진행...")
                 else:
                     # 추가 안정화 대기 (폼이 완전히 초기화될 시간)
-                    time.sleep(2.0)
+                    time.sleep(1.0)
                 
                 log(f"  ✅ 탭 선택 완료 (ID): {tab_name}")
                 return True
@@ -365,9 +365,9 @@ def select_property_tab(driver, tab_name: str) -> bool:
                     # ✅ 추가: 페이지가 완전히 준비될 때까지 대기
                     log(f"  ⏳ 탭 선택 후 페이지 준비 대기 중...")
                     
-                    # 날짜 입력 필드가 준비될 때까지 반복 확인 (최대 10초)
+                    # 날짜 입력 필드가 준비될 때까지 반복 확인 (최대 2초)
                     date_field_ready = False
-                    for wait_attempt in range(10):  # 최대 10번 시도 (총 10초)
+                    for wait_attempt in range(2):  # 최대 2번 시도 (총 2초)
                         try:
                             date_field = driver.find_element(By.CSS_SELECTOR, "#srchBgnDe")
                             if date_field.is_displayed() and date_field.is_enabled():
@@ -388,7 +388,7 @@ def select_property_tab(driver, tab_name: str) -> bool:
                         log(f"  ⚠️  날짜 입력 필드 확인 실패, 계속 진행...")
                     else:
                         # 추가 안정화 대기 (폼이 완전히 초기화될 시간)
-                        time.sleep(2.0)
+                        time.sleep(1.0)
                     
                     log(f"  ✅ 탭 선택 완료 (ID, 재시도): {tab_name}")
                     return True
@@ -1588,6 +1588,10 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
                     time.sleep(5)
                     continue
                 return False
+            
+            # ✅ 추가: 다운로드 버튼 클릭 후 다운로드 시작 대기 (10초)
+            log(f"  ⏳ 다운로드 시작 대기 중... (10초)")
+            time.sleep(10.0)
         except Exception as e:
             if "NO_DATA_AVAILABLE" in str(e):
                 log(f"  ⏭️  데이터 없음, 스킵")
@@ -1764,10 +1768,6 @@ def main():
             if not select_property_tab(driver, property_type):
                 log(f"⚠️  탭 선택 실패, 다음 종목으로...")
                 continue
-            
-            # ✅ 추가: 탭 선택 후 첫 번째 다운로드 전 추가 안정화 대기
-            log(f"  ⏳ 첫 번째 다운로드 전 페이지 안정화 대기...")
-            time.sleep(3.0)
             
             # 진행 상황 확인
             prop_key = sanitize_folder_name(property_type)
