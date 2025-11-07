@@ -279,6 +279,29 @@ def select_property_tab(driver, tab_name: str) -> bool:
         try_accept_alert(driver, 2.0)
         remove_google_translate_popup(driver)
     
+    # 탭 요소가 나타날 때까지 명시적으로 대기
+    log(f"  ⏳ 탭 요소 로딩 대기 중...")
+    tab_loaded = False
+    for wait_attempt in range(15):  # 최대 15초 대기
+        try:
+            # 탭 컨테이너나 탭 요소가 있는지 확인
+            tab_container = driver.find_elements(By.CSS_SELECTOR, "ul.quarter-tab-cover")
+            if tab_container:
+                # 탭 링크가 있는지 확인
+                tab_links = driver.find_elements(By.CSS_SELECTOR, "ul.quarter-tab-cover a")
+                if tab_links:
+                    tab_loaded = True
+                    log(f"  ✅ 탭 요소 로딩 완료 ({wait_attempt + 1}번째 시도)")
+                    break
+        except:
+            pass
+        time.sleep(1.0)
+    
+    if not tab_loaded:
+        log(f"  ⚠️  탭 요소를 찾을 수 없지만 계속 진행...")
+        # 추가 대기
+        time.sleep(3.0)
+    
     # 탭 ID 매핑 (실제 페이지 구조 기반)
     TAB_ID_MAPPING = {
         "아파트": "xlsTab1",
@@ -1928,6 +1951,26 @@ def main():
                                 time.sleep(8)
                                 try_accept_alert(driver, 2.0)
                                 remove_google_translate_popup(driver)
+                            
+                            # 탭 요소가 나타날 때까지 명시적으로 대기
+                            log(f"  ⏳ 탭 요소 로딩 대기 중...")
+                            tab_loaded = False
+                            for wait_attempt in range(15):  # 최대 15초 대기
+                                try:
+                                    tab_container = driver.find_elements(By.CSS_SELECTOR, "ul.quarter-tab-cover")
+                                    if tab_container:
+                                        tab_links = driver.find_elements(By.CSS_SELECTOR, "ul.quarter-tab-cover a")
+                                        if tab_links:
+                                            tab_loaded = True
+                                            log(f"  ✅ 탭 요소 로딩 완료 ({wait_attempt + 1}번째 시도)")
+                                            break
+                                except:
+                                    pass
+                                time.sleep(1.0)
+                            
+                            if not tab_loaded:
+                                log(f"  ⚠️  탭 요소를 찾을 수 없지만 계속 진행...")
+                                time.sleep(3.0)
                             
                             if select_property_tab(driver, property_type):
                                 tab_selected = True
