@@ -1293,8 +1293,10 @@ def wait_for_download(timeout: int = 15, baseline_files: set = None, expected_ye
                         log(f"  📝 파일 쓰기 중... ({size:,} bytes, 안정화 대기: {stable_count.get(file_key, 0)}/3)")
         
         # 다운로드가 시작되지 않았을 때 경고 메시지 (한 번만) - 10초 후에만 표시
+        # elapsed는 실수이므로 10.0 이상일 때만 경고
         if not found_any_file and elapsed >= 10.0 and not no_file_warning_shown:
-            log(f"  ⚠️  다운로드가 시작되지 않은 것 같습니다. ({elapsed_int}초 경과)")
+            elapsed_rounded = round(elapsed, 1)
+            log(f"  ⚠️  다운로드가 시작되지 않은 것 같습니다. ({elapsed_rounded}초 경과)")
             log(f"     - 다운로드 폴더 확인: {TEMP_DOWNLOAD_DIR.absolute()}")
             log(f"     - 브라우저의 다운로드 설정을 확인하세요")
             no_file_warning_shown = True
@@ -1601,6 +1603,9 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
             # ✅ 추가: 다운로드 버튼 클릭 후 다운로드 시작 대기 (10초)
             log(f"  ⏳ 다운로드 시작 대기 중... (10초)")
             time.sleep(10.0)
+            
+            # 10초 대기 후 baseline_files 업데이트 (10초 동안 생성된 파일 제외)
+            baseline_files = set(TEMP_DOWNLOAD_DIR.glob("*"))
         except Exception as e:
             if "NO_DATA_AVAILABLE" in str(e):
                 log(f"  ⏭️  데이터 없음, 스킵")
