@@ -1238,7 +1238,8 @@ def wait_for_download(timeout: int = 15, baseline_files: set = None, expected_ye
             # 가장 최근 .crdownload 파일
             latest_crdownload = max(crdownloads, key=lambda p: p.stat().st_mtime)
             size = latest_crdownload.stat().st_size
-            if elapsed_int % 2 == 0 and elapsed_int > 0:
+            # 로그 출력 빈도 줄이기: 5초마다만 출력
+            if elapsed_int > 0 and elapsed_int % 5 == 0:
                 log(f"  ⏳ 다운로드 진행중... ({elapsed_int}초, {size:,} bytes)")
             continue
         
@@ -1291,8 +1292,8 @@ def wait_for_download(timeout: int = 15, baseline_files: set = None, expected_ye
                     if elapsed_int % 2 == 0:
                         log(f"  📝 파일 쓰기 중... ({size:,} bytes, 안정화 대기: {stable_count.get(file_key, 0)}/3)")
         
-        # 다운로드가 시작되지 않았을 때 경고 메시지 (한 번만)
-        if not found_any_file and elapsed_int >= 10 and not no_file_warning_shown:
+        # 다운로드가 시작되지 않았을 때 경고 메시지 (한 번만) - 10초 후에만 표시
+        if not found_any_file and elapsed >= 10.0 and not no_file_warning_shown:
             log(f"  ⚠️  다운로드가 시작되지 않은 것 같습니다. ({elapsed_int}초 경과)")
             log(f"     - 다운로드 폴더 확인: {TEMP_DOWNLOAD_DIR.absolute()}")
             log(f"     - 브라우저의 다운로드 설정을 확인하세요")
@@ -1584,6 +1585,14 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
         try:
             if not click_excel_download(driver, baseline_files=baseline_files):
                 if attempt < max_retries:
+                    # 재시도 전 페이지 새로고침
+                    log(f"  🔄 페이지 새로고침 중...")
+                    driver.get(MOLIT_URL)
+                    time.sleep(3)
+                    try_accept_alert(driver, 2.0)
+                    # 탭 재선택
+                    if not select_property_tab(driver, property_type):
+                        log(f"  ⚠️  탭 재선택 실패")
                     log(f"  ⏳ 5초 대기 후 재시도...")
                     time.sleep(5)
                     continue
@@ -1632,6 +1641,14 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
             except Exception as e:
                 log(f"  ❌ 파일 이동 실패: {e}")
                 if attempt < max_retries:
+                    # 재시도 전 페이지 새로고침
+                    log(f"  🔄 페이지 새로고침 중...")
+                    driver.get(MOLIT_URL)
+                    time.sleep(3)
+                    try_accept_alert(driver, 2.0)
+                    # 탭 재선택
+                    if not select_property_tab(driver, property_type):
+                        log(f"  ⚠️  탭 재선택 실패")
                     log(f"  ⏳ 5초 대기 후 재시도...")
                     time.sleep(5)
                     continue
@@ -1639,6 +1656,14 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
         else:
             # 실패
             if attempt < max_retries:
+                # 재시도 전 페이지 새로고침
+                log(f"  🔄 페이지 새로고침 중...")
+                driver.get(MOLIT_URL)
+                time.sleep(3)
+                try_accept_alert(driver, 2.0)
+                # 탭 재선택
+                if not select_property_tab(driver, property_type):
+                    log(f"  ⚠️  탭 재선택 실패")
                 log(f"  ⏳ 5초 대기 후 재시도...")
                 time.sleep(5)
             else:
