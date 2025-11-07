@@ -1608,6 +1608,14 @@ def download_single_month_with_retry(driver, property_type: str, start_date: dat
             elif "DOWNLOAD_LIMIT_100" in str(e):
                 raise  # 100건 제한은 상위로 전달
             if attempt < max_retries:
+                # 재시도 전 페이지 새로고침
+                log(f"  🔄 페이지 새로고침 중...")
+                driver.get(MOLIT_URL)
+                time.sleep(3)
+                try_accept_alert(driver, 2.0)
+                # 탭 재선택
+                if not select_property_tab(driver, property_type):
+                    log(f"  ⚠️  탭 재선택 실패")
                 log(f"  ⏳ 5초 대기 후 재시도...")
                 time.sleep(5)
                 continue
