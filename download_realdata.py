@@ -1292,7 +1292,7 @@ def wait_for_download(timeout: int = 15, baseline_files: set = None, expected_ye
                         log(f"  📝 파일 쓰기 중... ({size:,} bytes, 안정화 대기: {stable_count.get(file_key, 0)}/3)")
         
         # 다운로드가 시작되지 않았을 때 경고 메시지 (한 번만)
-        if not found_any_file and elapsed_int >= 3 and not no_file_warning_shown:
+        if not found_any_file and elapsed_int >= 10 and not no_file_warning_shown:
             log(f"  ⚠️  다운로드가 시작되지 않은 것 같습니다. ({elapsed_int}초 경과)")
             log(f"     - 다운로드 폴더 확인: {TEMP_DOWNLOAD_DIR.absolute()}")
             log(f"     - 브라우저의 다운로드 설정을 확인하세요")
